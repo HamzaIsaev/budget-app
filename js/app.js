@@ -3,6 +3,7 @@ import { renderHome } from './views/home.js';
 import { renderForm } from './views/form.js';
 import { renderStats } from './views/stats.js';
 import { renderPlan } from './views/plan.js';
+import { subscribe, syncNow } from './store.js';
 
 const root = document.getElementById('app');
 
@@ -50,3 +51,15 @@ export function goBack() {
 initTelegram();
 window.addEventListener('hashchange', route);
 route();
+
+// Data from another device: refresh read-only screens, but never a form the
+// user may be typing into.
+subscribe(() => {
+  const view = location.hash.split('/')[1] || '';
+  if (view === '' || view === 'stats') route();
+});
+syncNow();
+// Push pending changes before Telegram suspends or closes the app.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') syncNow();
+});

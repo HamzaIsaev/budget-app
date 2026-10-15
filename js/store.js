@@ -1,8 +1,10 @@
-// Local persistence. Amounts are stored as integers in minor units (kopecks/cents)
-// to avoid floating-point errors. The shape is versioned so we can migrate later
-// when a backend and investment assets are added.
+// Persistence. Amounts are stored as integers in minor units (kopecks/cents) to
+// avoid floating-point errors. The state lives in localStorage for instant
+// startup and is synced to Telegram CloudStorage so it survives reinstalls and
+// is shared between the user's devices.
 
 import { userId } from './telegram.js';
+import { cloudAvailable, loadFromCloud, saveToCloud } from './cloud.js';
 
 const SCHEMA_VERSION = 1;
 const STORAGE_KEY = `budget:v${SCHEMA_VERSION}:${userId() ?? 'local'}`;
@@ -37,6 +39,11 @@ function emptyState() {
     transactions: [],
     // Planned monthly spending, keyed by the month it starts from (`YYYY-MM`).
     plans: {},
+    plansUpdatedAt: 0,
+    // Deleted transaction ids → deletion time, so a deletion on one device
+    // isn't undone by another device that still has the transaction.
+    deleted: {},
+    updatedAt: 0,
   };
 }
 
@@ -62,19 +69,25 @@ function load() {
 let state = load();
 const listeners = new Set();
 
-function persist() {
+function saveLocal() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
     console.error('Failed to save', e);
   }
-  listeners.forEach((fn) => fn(state));
+}
+
+function persist() {
+  state.updatedAt = Date.now();
+  saveLocal();
+  scheduleSync();
 }
 
 export function getState() {
   return state;
 }
 
+/** Called with the new state when data arrives from another device. */
 export function subscribe(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
@@ -98,12 +111,15 @@ function newId() {
 
 /** @param {{type:'income'|'expense', amount:number, categoryId:string, date:string, note?:string}} tx */
 export function saveTransaction(tx) {
+  const now = Date.now();
   if (tx.id) {
-    state.transactions = state.transactions.map((t) => (t.id === tx.id ? { ...t, ...tx } : t));
+    state.transactions = state.transactions.map((t) =>
+      t.id === tx.id ? { ...t, ...tx, updatedAt: now } : t,
+    );
   } else {
     state.transactions = [
       ...state.transactions,
-      { ...tx, id: newId(), currency: state.settings.currency, createdAt: Date.now() },
+      { ...tx, id: newId(), currency: state.settings.currency, createdAt: now, updatedAt: now },
     ];
   }
   persist();
@@ -111,6 +127,7 @@ export function saveTransaction(tx) {
 
 export function deleteTransaction(id) {
   state.transactions = state.transactions.filter((t) => t.id !== id);
+  state.deleted = { ...state.deleted, [id]: Date.now() };
   persist();
 }
 
@@ -147,5 +164,81 @@ export function getPlan(month) {
 export function setPlan(month, amount) {
   state.plans = Object.fromEntries(Object.entries(state.plans).filter(([m]) => m < month));
   state.plans[month] = amount;
+  state.plansUpdatedAt = Date.now();
   persist();
+}
+
+// --- Cloud sync -----------------------------------------------------------------
+
+// What goes to the cloud. Categories are left out: built-in ones come from code.
+function cloudData(s) {
+  const { version, settings, transactions, plans, plansUpdatedAt, deleted, updatedAt } = s;
+  return { version, settings, transactions, plans, plansUpdatedAt, deleted, updatedAt };
+}
+
+const txTime = (t) => t.updatedAt ?? t.createdAt ?? 0;
+
+/**
+ * Combines two copies of the data, e.g. this device's and the cloud's, so that
+ * changes made on either side while the other was out of date are kept.
+ * Per transaction the latest edit wins; a deletion wins over older edits.
+ */
+function merge(a, b) {
+  const deleted = { ...a.deleted };
+  for (const [id, at] of Object.entries(b.deleted ?? {})) deleted[id] = Math.max(deleted[id] ?? 0, at);
+
+  const byId = new Map();
+  for (const t of [...a.transactions, ...(b.transactions ?? [])]) {
+    const current = byId.get(t.id);
+    if (!current || txTime(t) > txTime(current)) byId.set(t.id, t);
+  }
+  const transactions = [...byId.values()].filter((t) => !(deleted[t.id] >= txTime(t)));
+
+  const newer = (b.updatedAt ?? 0) > a.updatedAt ? b : a;
+  const plansFrom = (b.plansUpdatedAt ?? 0) > a.plansUpdatedAt ? b : a;
+  return {
+    ...a,
+    settings: { ...a.settings, ...newer.settings },
+    transactions,
+    plans: plansFrom.plans ?? {},
+    plansUpdatedAt: plansFrom.plansUpdatedAt ?? 0,
+    deleted,
+    updatedAt: Math.max(a.updatedAt, b.updatedAt ?? 0),
+  };
+}
+
+const sameData = (x, y) => JSON.stringify(cloudData(x)) === JSON.stringify(cloudData(y));
+
+let syncing = Promise.resolve();
+let syncTimer = null;
+
+function scheduleSync() {
+  if (!cloudAvailable()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, 800);
+}
+
+/**
+ * Pulls the cloud copy, merges it with this device's data and pushes the result
+ * back if anything differs. Runs on startup, after changes and when the app is
+ * hidden. Calls never overlap. Failures keep the local copy and retry later.
+ */
+export function syncNow() {
+  clearTimeout(syncTimer);
+  if (!cloudAvailable()) return Promise.resolve();
+  syncing = syncing.then(async () => {
+    try {
+      const remote = await loadFromCloud();
+      const merged = remote ? merge(state, remote) : state;
+      if (!sameData(merged, state)) {
+        state = merged;
+        saveLocal();
+        listeners.forEach((fn) => fn(state));
+      }
+      if (!remote || !sameData(merged, remote)) await saveToCloud(cloudData(merged));
+    } catch (e) {
+      console.error('Cloud sync failed', e);
+    }
+  });
+  return syncing;
 }
