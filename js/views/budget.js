@@ -11,6 +11,7 @@ import {
   categoriesFor,
   transactionsForMonth,
   summarize,
+  daysLeftInPeriod,
 } from '../store.js';
 import {
   parseAmount,
@@ -19,22 +20,15 @@ import {
   formatMonth,
   shiftMonth,
   monthPrepositional,
-  currentMonth,
-  todayISO,
   escapeHtml,
   bindAmountInput,
+  currencySymbol,
 } from '../format.js';
 import { showBackButton, showMainButton, setMainButtonEnabled, haptic } from '../telegram.js';
 import { goBack } from '../app.js';
 import { getMonth } from '../month.js';
-import { CURRENCY_SYMBOLS } from './form.js';
 
-/** Days left in `month` including today, or null if it isn't the current month. */
-function daysLeftIn(month) {
-  if (month !== currentMonth()) return null;
-  const [y, m] = month.split('-').map(Number);
-  return new Date(y, m, 0).getDate() - Number(todayISO().slice(8)) + 1;
-}
+const daysLeftIn = daysLeftInPeriod;
 
 const perDayMoney = (amount, days, currency) =>
   formatMoney(Math.floor(amount / days / 100) * 100, currency);
@@ -184,7 +178,8 @@ export function renderBudgetEdit(root) {
   const month = getMonth();
   const savedItems = getPlanItems(month);
   const savedTotal = getPlan(month);
-  const categories = categoriesFor('expense');
+  // Hidden categories are offered only to rows that already use them.
+  const categories = categoriesFor('expense', { includeHidden: true });
   const prevMonth = shiftMonth(month, -1);
   const prevSpent = expenseByCategory(prevMonth);
 
@@ -196,7 +191,7 @@ export function renderBudgetEdit(root) {
     name: i.name ?? '',
     amount: amountToInput(i.amount),
   }));
-  if (!rows.length) rows.push({ categoryId: categories[0].id, name: '', amount: '' });
+  if (!rows.length) rows.push({ categoryId: categories.find((c) => !c.hidden)?.id ?? null, name: '', amount: '' });
 
   root.innerHTML = `
     <header class="form-header">
@@ -235,7 +230,7 @@ export function renderBudgetEdit(root) {
     // A category can be planned once; the other rows don't offer it again.
     const used = new Set(rows.filter((r, j) => j !== i && r.categoryId).map((r) => r.categoryId));
     const options = categories
-      .filter((c) => !used.has(c.id))
+      .filter((c) => !used.has(c.id) && (!c.hidden || c.id === row.categoryId))
       .map(
         (c) =>
           `<option value="${c.id}" ${c.id === row.categoryId ? 'selected' : ''}>${c.emoji} ${escapeHtml(c.name)}</option>`,
@@ -270,7 +265,7 @@ export function renderBudgetEdit(root) {
         <label class="amount-field">
           <input id="total" inputmode="decimal" autocomplete="off" placeholder="0"
                  value="${escapeHtml(total)}" aria-label="Сумма плана">
-          <span class="currency">${CURRENCY_SYMBOLS[currency] ?? currency}</span>
+          <span class="currency">${currencySymbol(currency)}</span>
         </label>`;
       const input = body.querySelector('#total');
       bindAmountInput(input, () => {
@@ -327,7 +322,7 @@ export function renderBudgetEdit(root) {
     }
     if (e.target.closest('#add-row')) {
       const used = new Set(rows.map((r) => r.categoryId));
-      const next = categories.find((c) => !used.has(c.id));
+      const next = categories.find((c) => !used.has(c.id) && !c.hidden);
       rows.push({ categoryId: next?.id ?? null, name: '', amount: '' });
       haptic('light');
       renderBody();
@@ -398,7 +393,7 @@ export function renderIncomeGoalEdit(root) {
     <label class="amount-field">
       <input id="amount" inputmode="decimal" autocomplete="off" placeholder="0"
              value="${goal ? amountToInput(goal) : ''}" aria-label="Сумма">
-      <span class="currency">${CURRENCY_SYMBOLS[currency] ?? currency}</span>
+      <span class="currency">${currencySymbol(currency)}</span>
     </label>
 
     ${

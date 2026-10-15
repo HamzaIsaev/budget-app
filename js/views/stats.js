@@ -151,6 +151,7 @@ function compactMoney(minor, currency) {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency,
+    currencyDisplay: 'narrowSymbol',
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(minor / 100);

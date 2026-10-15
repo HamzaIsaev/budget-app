@@ -10,10 +10,10 @@ import {
   escapeHtml,
   bindAmountInput,
   todayISO,
+  currencySymbol,
 } from '../format.js';
 import { showBackButton, showMainButton, setMainButtonEnabled, haptic, confirm } from '../telegram.js';
 import { goBack, navigate } from '../app.js';
-import { CURRENCY_SYMBOLS } from './form.js';
 
 const EMOJIS = ['🌟', '✈️', '🏖️', '🚗', '🏠', '📱', '💻', '💍', '🎓', '🎁', '🏍️', '🛋️'];
 
@@ -98,7 +98,7 @@ export function renderGoalEdit(root, id) {
   const { currency } = getState().settings;
   const existing = id ? getGoal(id) : null;
   if (id && !existing) return goBack();
-  const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
+  const symbol = currencySymbol(currency);
   let emoji = existing?.emoji ?? EMOJIS[0];
 
   root.innerHTML = `
@@ -204,7 +204,7 @@ export function renderGoalAdd(root, id) {
 
     <label class="amount-field">
       <input id="amount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Сумма">
-      <span class="currency">${CURRENCY_SYMBOLS[currency] ?? currency}</span>
+      <span class="currency">${currencySymbol(currency)}</span>
     </label>
   `;
 

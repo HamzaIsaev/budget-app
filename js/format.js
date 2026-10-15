@@ -1,15 +1,40 @@
 const LOCALE = 'ru-RU';
 
-export function formatMoney(minor, currency, { sign = false } = {}) {
-  const value = minor / 100;
-  const formatted = new Intl.NumberFormat(LOCALE, {
+// Signs that Intl renders oddly in Russian (a code, an abbreviation, or a new
+// glyph that older fonts lack), replaced with the ones people actually use.
+const SIGN_OVERRIDES = { BYN: 'Br', UZS: 'сум', KGS: 'сом', GEL: '₾', TJS: 'смн' };
+
+function moneyFormat(currency, options) {
+  return new Intl.NumberFormat(LOCALE, {
     style: 'currency',
     currency,
-    maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
-    signDisplay: sign ? 'exceptZero' : 'auto',
-  }).format(value);
-  // Use a real minus sign rather than a hyphen.
-  return formatted.replace('-', '−');
+    currencyDisplay: 'narrowSymbol',
+    ...options,
+  });
+}
+
+export function formatMoney(minor, currency, { sign = false } = {}) {
+  const value = minor / 100;
+  return (
+    moneyFormat(currency, {
+      maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+      signDisplay: sign ? 'exceptZero' : 'auto',
+    })
+      .formatToParts(value)
+      .map((p) => (p.type === 'currency' ? (SIGN_OVERRIDES[currency] ?? p.value) : p.value))
+      .join('')
+      // Use a real minus sign rather than a hyphen.
+      .replace('-', '−')
+  );
+}
+
+/** The currency's short sign, e.g. ₽, $, ₸. */
+export function currencySymbol(currency) {
+  return (
+    SIGN_OVERRIDES[currency] ??
+    moneyFormat(currency).formatToParts(0).find((p) => p.type === 'currency')?.value ??
+    currency
+  );
 }
 
 /** Parses user input like "1 250,50" into minor units. Returns null if invalid. */
@@ -35,10 +60,6 @@ export function toISODate(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-}
-
-export function currentMonth() {
-  return todayISO().slice(0, 7);
 }
 
 export function shiftMonth(month, delta) {

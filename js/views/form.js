@@ -5,7 +5,7 @@ import {
   deleteTransaction,
   getState,
 } from '../store.js';
-import { parseAmount, amountToInput, todayISO, escapeHtml, bindAmountInput } from '../format.js';
+import { parseAmount, amountToInput, todayISO, escapeHtml, bindAmountInput, currencySymbol } from '../format.js';
 import {
   showBackButton,
   showMainButton,
@@ -14,8 +14,6 @@ import {
   confirm,
 } from '../telegram.js';
 import { goBack, navigate } from '../app.js';
-
-export const CURRENCY_SYMBOLS = { RUB: '₽', USD: '$', EUR: '€' };
 
 export function renderForm(root, { id, type }) {
   const existing = id ? getTransaction(id) : null;
@@ -40,7 +38,7 @@ export function renderForm(root, { id, type }) {
     <label class="amount-field">
       <input id="amount" inputmode="decimal" autocomplete="off" placeholder="0"
              value="${escapeHtml(draft.amountInput)}" aria-label="Сумма">
-      <span class="currency">${CURRENCY_SYMBOLS[currency] ?? currency}</span>
+      <span class="currency">${currencySymbol(currency)}</span>
     </label>
 
     <div class="field-label">Категория</div>
@@ -68,7 +66,10 @@ export function renderForm(root, { id, type }) {
     root.querySelectorAll('[data-type]').forEach((b) => {
       b.classList.toggle('active', b.dataset.type === draft.type);
     });
-    const cats = categoriesFor(draft.type);
+    // Hidden categories aren't offered, except the one this record already has.
+    const cats = categoriesFor(draft.type, { includeHidden: true }).filter(
+      (c) => !c.hidden || c.id === draft.categoryId,
+    );
     if (!cats.some((c) => c.id === draft.categoryId)) draft.categoryId = null;
     categoriesEl.innerHTML = cats
       .map(

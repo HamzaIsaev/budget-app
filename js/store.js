@@ -5,6 +5,7 @@
 
 import { userId } from './telegram.js';
 import { cloudAvailable, cloudUnavailableReason, loadFromCloud, saveToCloud } from './cloud.js';
+import { todayISO, toISODate, shiftMonth } from './format.js';
 
 const SCHEMA_VERSION = 1;
 const STORAGE_KEY = `budget:v${SCHEMA_VERSION}:${userId() ?? 'local'}`;
@@ -34,9 +35,13 @@ export const DEFAULT_CATEGORIES = [
 function emptyState() {
   return {
     version: SCHEMA_VERSION,
-    settings: { currency: 'RUB' },
-    categories: DEFAULT_CATEGORIES,
+    // monthStartDay: the day a budget month begins (1–28), e.g. payday.
+    settings: { currency: 'RUB', monthStartDay: 1 },
     transactions: [],
+    // The user's category changes: renamed or hidden built-in categories, and
+    // their own categories (`custom: true`). { id, type?, name?, emoji?,
+    // hidden?, custom?, createdAt, updatedAt }.
+    categoryEdits: [],
     // Planned monthly spending, keyed by the month it starts from (`YYYY-MM`).
     plans: {},
     plansUpdatedAt: 0,
@@ -52,20 +57,15 @@ function emptyState() {
   };
 }
 
-// Built-in categories always come from DEFAULT_CATEGORIES, so new or renamed
-// defaults reach users who already have saved data. Anything stored that isn't
-// a default (future user-created categories) is kept after them.
-function mergeCategories(stored = []) {
-  const defaultIds = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
-  return [...DEFAULT_CATEGORIES, ...stored.filter((c) => !defaultIds.has(c.id))];
-}
-
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return emptyState();
-    const data = JSON.parse(raw);
-    return { ...emptyState(), ...data, categories: mergeCategories(data.categories) };
+    // `categories` was stored by older versions; categories now come from
+    // DEFAULT_CATEGORIES plus `categoryEdits`.
+    const { categories, ...data } = JSON.parse(raw);
+    const empty = emptyState();
+    return { ...empty, ...data, settings: { ...empty.settings, ...data.settings } };
   } catch {
     return emptyState();
   }
@@ -98,12 +98,58 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
-export function categoriesFor(type) {
-  return state.categories.filter((c) => c.type === type);
+export function setSetting(key, value) {
+  state.settings = { ...state.settings, [key]: value };
+  persist();
 }
 
+// --- Categories -----------------------------------------------------------------
+// Built-in categories come from code, so new defaults reach everyone; the
+// user's renames, hidden flags and own categories are applied on top.
+
+function allCategories() {
+  const edits = new Map(state.categoryEdits.map((e) => [e.id, e]));
+  const builtIn = DEFAULT_CATEGORIES.map((c) => ({ ...c, ...edits.get(c.id), custom: false }));
+  const custom = state.categoryEdits
+    .filter((e) => e.custom)
+    .sort((a, b) => a.createdAt - b.createdAt);
+  // Own categories go before the built-in "Другое", which stays last.
+  const isOther = (c) => c.id === 'other-exp' || c.id === 'other-inc';
+  return [...builtIn.filter((c) => !isOther(c)), ...custom, ...builtIn.filter(isOther)];
+}
+
+/** Categories of a type for pickers; hidden ones only when asked for. */
+export function categoriesFor(type, { includeHidden = false } = {}) {
+  return allCategories().filter((c) => c.type === type && (includeHidden || !c.hidden));
+}
+
+/** Any category by id, hidden ones included, so old records still show theirs. */
 export function getCategory(id) {
-  return state.categories.find((c) => c.id === id);
+  return allCategories().find((c) => c.id === id);
+}
+
+/** Creates an own category (no `id`) or changes any category. Returns its id. */
+export function saveCategory({ id, type, name, emoji, hidden }) {
+  const now = Date.now();
+  const existing = state.categoryEdits.find((e) => e.id === id);
+  const changes = Object.fromEntries(
+    Object.entries({ name, emoji, hidden }).filter(([, v]) => v !== undefined),
+  );
+  if (existing) {
+    state.categoryEdits = state.categoryEdits.map((e) =>
+      e.id === id ? { ...e, ...changes, updatedAt: now } : e,
+    );
+  } else if (id) {
+    state.categoryEdits = [...state.categoryEdits, { id, ...changes, createdAt: now, updatedAt: now }];
+  } else {
+    id = newId();
+    state.categoryEdits = [
+      ...state.categoryEdits,
+      { id, type, custom: true, hidden: false, ...changes, createdAt: now, updatedAt: now },
+    ];
+  }
+  persist();
+  return id;
 }
 
 export function getTransaction(id) {
@@ -136,10 +182,42 @@ export function deleteTransaction(id) {
   persist();
 }
 
-/** Transactions whose date falls in the given month (`YYYY-MM`), newest first. */
+// --- Budget months ---------------------------------------------------------------
+// A budget month `YYYY-MM` runs from settings.monthStartDay of that month to the
+// day before it in the next month, e.g. with day 10: 10 Oct – 9 Nov. With the
+// default day 1 it is the calendar month.
+
+const startDay = () => state.settings.monthStartDay || 1;
+
+/** First and last day (ISO dates, inclusive) of a budget month. */
+export function periodRange(month) {
+  const [y, m] = month.split('-').map(Number);
+  return {
+    start: toISODate(new Date(y, m - 1, startDay())),
+    end: toISODate(new Date(y, m, startDay() - 1)),
+  };
+}
+
+/** The budget month today belongs to. */
+export function currentPeriod() {
+  const today = todayISO();
+  const month = today.slice(0, 7);
+  return Number(today.slice(8)) < startDay() ? shiftMonth(month, -1) : month;
+}
+
+/** Days left in the budget month including today, or null if it isn't the current one. */
+export function daysLeftInPeriod(month) {
+  if (month !== currentPeriod()) return null;
+  const [y, m, d] = periodRange(month).end.split('-').map(Number);
+  const [ty, tm, td] = todayISO().split('-').map(Number);
+  return Math.round((new Date(y, m - 1, d) - new Date(ty, tm - 1, td)) / 86400000) + 1;
+}
+
+/** Transactions in the given budget month (`YYYY-MM`), newest first. */
 export function transactionsForMonth(month) {
+  const { start, end } = periodRange(month);
   return state.transactions
-    .filter((t) => t.date.startsWith(month))
+    .filter((t) => t.date >= start && t.date <= end)
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 }
 
@@ -239,13 +317,14 @@ export function deleteGoal(id) {
 
 // What goes to the cloud. Categories are left out: built-in ones come from code.
 function cloudData(s) {
-  const { version, settings, transactions, goals, deleted, updatedAt } = s;
+  const { version, settings, transactions, goals, categoryEdits, deleted, updatedAt } = s;
   const { plans, plansUpdatedAt, incomeGoals, incomeGoalsUpdatedAt } = s;
   return {
     version,
     settings,
     transactions,
     goals,
+    categoryEdits,
     plans,
     plansUpdatedAt,
     incomeGoals,
@@ -279,6 +358,7 @@ function merge(a, b) {
 
   const transactions = mergeById(a.transactions, b.transactions, deleted);
   const goals = mergeById(a.goals, b.goals, deleted);
+  const categoryEdits = mergeById(a.categoryEdits, b.categoryEdits, deleted);
 
   const newer = (b.updatedAt ?? 0) > a.updatedAt ? b : a;
   return {
@@ -286,6 +366,7 @@ function merge(a, b) {
     settings: { ...a.settings, ...newer.settings },
     transactions,
     goals,
+    categoryEdits,
     // Each kind of plan comes whole from whichever side changed it last.
     ...Object.fromEntries(
       Object.values(PLAN_FIELDS).flatMap((f) => {

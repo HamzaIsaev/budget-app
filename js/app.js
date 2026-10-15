@@ -5,6 +5,7 @@ import { renderStats } from './views/stats.js';
 import { renderMore } from './views/more.js';
 import { renderBudgetEdit, renderIncomeGoalEdit } from './views/budget.js';
 import { renderDreams, renderGoalEdit, renderGoalAdd } from './views/goals.js';
+import { renderCategories, renderCategoryEdit } from './views/categories.js';
 import { mountTabBar, updateTabBar } from './tabbar.js';
 import { subscribe, syncNow } from './store.js';
 
@@ -20,6 +21,8 @@ const root = document.getElementById('app');
 //   #/budget/income — set the monthly income goal
 //   #/goal/new, #/goal/<id> — create or edit a savings goal
 //   #/goal/<id>/add — put money aside for a goal
+//   #/categories  — manage categories
+//   #/category/new/<expense|income>, #/category/<id> — create or edit one
 const TAB_VIEWS = { '': renderHome, stats: renderStats, dreams: renderDreams, more: renderMore };
 
 function route() {
@@ -38,6 +41,11 @@ function route() {
     renderBudgetEdit(root);
   } else if (view === 'budget' && param === 'income') {
     renderIncomeGoalEdit(root);
+  } else if (view === 'categories') {
+    renderCategories(root);
+  } else if (view === 'category' && param) {
+    if (param === 'new') renderCategoryEdit(root, null, action);
+    else renderCategoryEdit(root, decodeURIComponent(param));
   } else if (view === 'goal' && param) {
     const id = param === 'new' ? null : decodeURIComponent(param);
     if (id && action === 'add') renderGoalAdd(root, id);

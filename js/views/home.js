@@ -102,14 +102,14 @@ function renderList(txs, currency) {
             <span>${formatMoney(dayTotal, currency, { sign: true })}</span>
           </div>
           <ul class="card tx-list">
-            ${items.map((t) => renderRow(t)).join('')}
+            ${items.map((t) => renderRow(t, currency)).join('')}
           </ul>
         </section>`;
     })
     .join('');
 }
 
-function renderRow(t) {
+function renderRow(t, currency) {
   const cat = getCategory(t.categoryId) ?? { name: 'Без категории', emoji: '•' };
   const isIncome = t.type === 'income';
   return `
@@ -120,7 +120,7 @@ function renderRow(t) {
         ${t.note ? `<span class="tx-note">${escapeHtml(t.note)}</span>` : ''}
       </span>
       <span class="tx-amount ${isIncome ? 'pos' : ''}">
-        ${formatMoney(isIncome ? t.amount : -t.amount, t.currency, { sign: true })}
+        ${formatMoney(isIncome ? t.amount : -t.amount, currency, { sign: true })}
       </span>
     </li>`;
 }

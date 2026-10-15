@@ -949,3 +949,122 @@ body:has(.main-button) #app {
   font-weight: 500;
   text-align: left;
 }
+
+/* --- Settings and categories ------------------------------------------------- */
+
+.month-title {
+  text-align: center;
+}
+
+.month-range {
+  color: var(--hint);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.field-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  max-width: 60%;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.field-link {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chevron-right {
+  color: var(--hint);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.more-note-left {
+  margin: 8px 4px 20px;
+  font-size: 13px;
+}
+
+.cat-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.cat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  cursor: pointer;
+}
+
+.cat-item + .cat-item {
+  border-top: 1px solid var(--separator);
+}
+
+.cat-item-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.cat-item.is-hidden .tx-emoji,
+.cat-item.is-hidden .cat-item-name {
+  opacity: 0.4;
+}
+
+.cat-item-tag {
+  color: var(--hint);
+  font-size: 12px;
+}
+
+.cat-edit-head {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.emoji-input {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 0;
+  outline: 0;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 28px;
+  text-align: center;
+}
+
+.name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+  border: 0;
+  outline: 0;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px;
+}
+
+.name-input::placeholder {
+  color: var(--hint);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
