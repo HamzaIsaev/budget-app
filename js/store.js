@@ -35,6 +35,8 @@ function emptyState() {
     settings: { currency: 'RUB' },
     categories: DEFAULT_CATEGORIES,
     transactions: [],
+    // Planned monthly spending, keyed by the month it starts from (`YYYY-MM`).
+    plans: {},
   };
 }
 
@@ -127,4 +129,23 @@ export function summarize(transactions) {
     else expense += t.amount;
   }
   return { income, expense, balance: income - expense };
+}
+
+/**
+ * Planned spending for a month, in minor units, or null. A plan carries forward
+ * to later months until a new one is set, so changing it never rewrites the past.
+ */
+export function getPlan(month) {
+  const from = Object.keys(state.plans)
+    .filter((m) => m <= month)
+    .sort()
+    .pop();
+  return from ? state.plans[from] : null;
+}
+
+/** Sets the plan from `month` onward; `null` removes it from that month on. */
+export function setPlan(month, amount) {
+  state.plans = Object.fromEntries(Object.entries(state.plans).filter(([m]) => m < month));
+  state.plans[month] = amount;
+  persist();
 }

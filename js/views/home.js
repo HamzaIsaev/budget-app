@@ -1,30 +1,15 @@
-import { getState, getCategory, transactionsForMonth, summarize } from '../store.js';
-import {
-  formatMoney,
-  formatMonth,
-  formatDayHeading,
-  currentMonth,
-  shiftMonth,
-  escapeHtml,
-} from '../format.js';
-import { haptic } from '../telegram.js';
+import { getState, getCategory, getPlan, transactionsForMonth, summarize } from '../store.js';
+import { formatMoney, formatDayHeading, escapeHtml, currentMonth, todayISO } from '../format.js';
 import { navigate } from '../app.js';
-
-// Remembered across navigation so returning from the form keeps the same month.
-let month = currentMonth();
+import { getMonth, monthSwitcherHtml, handleMonthSwitch } from '../month.js';
 
 export function renderHome(root) {
   const { currency } = getState().settings;
-  const txs = transactionsForMonth(month);
+  const txs = transactionsForMonth(getMonth());
   const { income, expense, balance } = summarize(txs);
-  const isCurrent = month === currentMonth();
 
   root.innerHTML = `
-    <header class="month-switcher">
-      <button class="icon-btn" data-action="prev" aria-label="Предыдущий месяц">‹</button>
-      <h1>${formatMonth(month)}</h1>
-      <button class="icon-btn" data-action="next" aria-label="Следующий месяц" ${isCurrent ? 'disabled' : ''}>›</button>
-    </header>
+    ${monthSwitcherHtml()}
 
     <section class="card summary">
       <div class="summary-label">Баланс за месяц</div>
@@ -39,6 +24,8 @@ export function renderHome(root) {
           <div class="neg">${formatMoney(expense, currency)}</div>
         </div>
       </div>
+      ${renderPlanBlock(expense, currency)}
+      <button class="summary-link" data-action="stats">Статистика ›</button>
     </section>
 
     ${txs.length ? renderList(txs, currency) : renderEmpty()}
@@ -53,21 +40,52 @@ export function renderHome(root) {
     const el = e.target.closest('[data-action], [data-tx]');
     if (!el) return;
     if (el.dataset.tx) return navigate(`/edit/${encodeURIComponent(el.dataset.tx)}`);
+    if (handleMonthSwitch(el)) return renderHome(root);
     switch (el.dataset.action) {
-      case 'prev':
-        month = shiftMonth(month, -1);
-        haptic('light');
-        return renderHome(root);
-      case 'next':
-        month = shiftMonth(month, 1);
-        haptic('light');
-        return renderHome(root);
+      case 'stats':
+        return navigate('/stats');
+      case 'plan':
+        return navigate('/plan');
       case 'add-expense':
         return navigate('/new/expense');
       case 'add-income':
         return navigate('/new/income');
     }
   };
+}
+
+function renderPlanBlock(spent, currency) {
+  const month = getMonth();
+  const plan = getPlan(month);
+  if (!plan) {
+    return `<button class="plan-empty" data-action="plan">＋ Запланировать расходы на месяц</button>`;
+  }
+
+  const left = plan - spent;
+  const over = left < 0;
+  const ratio = Math.min(spent / plan, 1);
+
+  // For the current month, how much can still be spent per day, today included.
+  let perDay = '';
+  if (month === currentMonth() && !over) {
+    const [y, m] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const daysLeft = daysInMonth - Number(todayISO().slice(8)) + 1;
+    perDay = `<div class="plan-hint">≈ ${formatMoney(Math.floor(left / daysLeft / 100) * 100, currency)} в день до конца месяца</div>`;
+  }
+
+  return `
+    <div class="plan" data-action="plan" role="button" aria-label="Изменить план">
+      <div class="plan-row">
+        <span>${over ? '⚠️ Перерасход' : 'Осталось'}
+          <b class="${over ? 'neg' : ''}">${formatMoney(Math.abs(left), currency)}</b></span>
+        <span class="plan-of">из ${formatMoney(plan, currency)}</span>
+      </div>
+      <div class="meter ${over ? 'over' : ''}" role="meter" aria-valuemin="0" aria-valuemax="${plan}" aria-valuenow="${spent}">
+        <div class="meter-fill" style="width:${ratio * 100}%"></div>
+      </div>
+      ${perDay}
+    </div>`;
 }
 
 function renderList(txs, currency) {

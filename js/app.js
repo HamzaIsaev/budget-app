@@ -1,10 +1,14 @@
 import { initTelegram, hideBackButton, hideMainButton } from './telegram.js';
 import { renderHome } from './views/home.js';
 import { renderForm } from './views/form.js';
+import { renderStats } from './views/stats.js';
+import { renderPlan } from './views/plan.js';
 
 const root = document.getElementById('app');
 
 // Routes: #/            — month overview
+//         #/stats       — charts for the selected month
+//         #/plan        — planned spending for the selected month
 //         #/new/expense — new expense (or /new/income)
 //         #/edit/<id>   — edit an existing transaction
 function route() {
@@ -17,6 +21,10 @@ function route() {
 
   if (view === 'new') {
     renderForm(root, { type: param === 'income' ? 'income' : 'expense' });
+  } else if (view === 'plan') {
+    renderPlan(root);
+  } else if (view === 'stats') {
+    renderStats(root);
   } else if (view === 'edit' && param) {
     renderForm(root, { id: decodeURIComponent(param) });
   } else {

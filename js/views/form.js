@@ -15,7 +15,7 @@ import {
 } from '../telegram.js';
 import { goBack, navigate } from '../app.js';
 
-const CURRENCY_SYMBOLS = { RUB: '₽', USD: '$', EUR: '€' };
+export const CURRENCY_SYMBOLS = { RUB: '₽', USD: '$', EUR: '€' };
 
 export function renderForm(root, { id, type }) {
   const existing = id ? getTransaction(id) : null;

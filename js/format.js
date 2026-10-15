@@ -72,3 +72,13 @@ export function escapeHtml(str) {
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
   );
 }
+
+const MONTHS_PREPOSITIONAL = [
+  'январе', 'феврале', 'марте', 'апреле', 'мае', 'июне',
+  'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре',
+];
+
+/** "в сентябре" — month name for use after the preposition «в». */
+export function monthPrepositional(month) {
+  return MONTHS_PREPOSITIONAL[Number(month.slice(5, 7)) - 1];
+}
