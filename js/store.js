@@ -9,13 +9,19 @@ const STORAGE_KEY = `budget:v${SCHEMA_VERSION}:${userId() ?? 'local'}`;
 
 export const DEFAULT_CATEGORIES = [
   { id: 'food', type: 'expense', name: 'Продукты', emoji: '🛒' },
+  { id: 'fastfood', type: 'expense', name: 'Фастфуд', emoji: '🍔' },
   { id: 'cafe', type: 'expense', name: 'Кафе', emoji: '☕' },
   { id: 'transport', type: 'expense', name: 'Транспорт', emoji: '🚕' },
+  { id: 'auto', type: 'expense', name: 'Авто', emoji: '🚗' },
   { id: 'home', type: 'expense', name: 'Жильё', emoji: '🏠' },
   { id: 'subs', type: 'expense', name: 'Подписки', emoji: '📱' },
   { id: 'health', type: 'expense', name: 'Здоровье', emoji: '💊' },
+  { id: 'beauty', type: 'expense', name: 'Красота', emoji: '💅' },
+  { id: 'clothes', type: 'expense', name: 'Одежда', emoji: '👕' },
   { id: 'shopping', type: 'expense', name: 'Покупки', emoji: '🛍️' },
   { id: 'fun', type: 'expense', name: 'Развлечения', emoji: '🎮' },
+  { id: 'travel', type: 'expense', name: 'Путешествия', emoji: '✈️' },
+  { id: 'education', type: 'expense', name: 'Образование', emoji: '📚' },
   { id: 'other-exp', type: 'expense', name: 'Другое', emoji: '📦' },
   { id: 'salary', type: 'income', name: 'Зарплата', emoji: '💼' },
   { id: 'freelance', type: 'income', name: 'Подработка', emoji: '🧑‍💻' },
@@ -32,12 +38,20 @@ function emptyState() {
   };
 }
 
+// Built-in categories always come from DEFAULT_CATEGORIES, so new or renamed
+// defaults reach users who already have saved data. Anything stored that isn't
+// a default (future user-created categories) is kept after them.
+function mergeCategories(stored = []) {
+  const defaultIds = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
+  return [...DEFAULT_CATEGORIES, ...stored.filter((c) => !defaultIds.has(c.id))];
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return emptyState();
     const data = JSON.parse(raw);
-    return { ...emptyState(), ...data };
+    return { ...emptyState(), ...data, categories: mergeCategories(data.categories) };
   } catch {
     return emptyState();
   }
