@@ -3,22 +3,19 @@
 
 const tg = window.Telegram?.WebApp;
 const inTelegram = Boolean(tg?.initData);
+const APP_BACKGROUND = '#000000';
 
 export function initTelegram() {
-  if (!inTelegram) {
-    document.documentElement.dataset.env = 'browser';
-    return;
-  }
+  if (!inTelegram) return;
   tg.ready();
   tg.expand();
-  applyTheme();
-  tg.onEvent('themeChanged', applyTheme);
-}
-
-function applyTheme() {
-  document.documentElement.dataset.scheme = tg.colorScheme;
-  tg.setHeaderColor?.('secondary_bg_color');
-  tg.setBackgroundColor?.('secondary_bg_color');
+  // The app is always black (see styles.css); paint Telegram's own header,
+  // background and bottom bar to match instead of following the user's theme.
+  if (tg.isVersionAtLeast('6.9')) {
+    tg.setHeaderColor(APP_BACKGROUND);
+    tg.setBackgroundColor(APP_BACKGROUND);
+  }
+  if (tg.isVersionAtLeast('7.10')) tg.setBottomBarColor(APP_BACKGROUND);
 }
 
 export function userId() {
