@@ -40,6 +40,9 @@ function emptyState() {
     // Planned monthly spending, keyed by the month it starts from (`YYYY-MM`).
     plans: {},
     plansUpdatedAt: 0,
+    // Monthly income goals, same shape as `plans`.
+    incomeGoals: {},
+    incomeGoalsUpdatedAt: 0,
     // Deleted transaction ids → deletion time, so a deletion on one device
     // isn't undone by another device that still has the transaction.
     deleted: {},
@@ -148,23 +151,33 @@ export function summarize(transactions) {
   return { income, expense, balance: income - expense };
 }
 
+// Where each kind of plan lives: 'expense' is planned spending, 'income' is
+// the earnings goal.
+const PLAN_FIELDS = {
+  expense: { plans: 'plans', updatedAt: 'plansUpdatedAt' },
+  income: { plans: 'incomeGoals', updatedAt: 'incomeGoalsUpdatedAt' },
+};
+
 /**
- * Planned spending for a month, in minor units, or null. A plan carries forward
- * to later months until a new one is set, so changing it never rewrites the past.
+ * The plan for a month, in minor units, or null. A plan carries forward to
+ * later months until a new one is set, so changing it never rewrites the past.
  */
-export function getPlan(month) {
-  const from = Object.keys(state.plans)
+export function getPlan(month, kind = 'expense') {
+  const plans = state[PLAN_FIELDS[kind].plans];
+  const from = Object.keys(plans)
     .filter((m) => m <= month)
     .sort()
     .pop();
-  return from ? state.plans[from] : null;
+  return from ? plans[from] : null;
 }
 
 /** Sets the plan from `month` onward; `null` removes it from that month on. */
-export function setPlan(month, amount) {
-  state.plans = Object.fromEntries(Object.entries(state.plans).filter(([m]) => m < month));
-  state.plans[month] = amount;
-  state.plansUpdatedAt = Date.now();
+export function setPlan(month, amount, kind = 'expense') {
+  const fields = PLAN_FIELDS[kind];
+  const plans = Object.fromEntries(Object.entries(state[fields.plans]).filter(([m]) => m < month));
+  plans[month] = amount;
+  state[fields.plans] = plans;
+  state[fields.updatedAt] = Date.now();
   persist();
 }
 
@@ -172,8 +185,19 @@ export function setPlan(month, amount) {
 
 // What goes to the cloud. Categories are left out: built-in ones come from code.
 function cloudData(s) {
-  const { version, settings, transactions, plans, plansUpdatedAt, deleted, updatedAt } = s;
-  return { version, settings, transactions, plans, plansUpdatedAt, deleted, updatedAt };
+  const { version, settings, transactions, deleted, updatedAt } = s;
+  const { plans, plansUpdatedAt, incomeGoals, incomeGoalsUpdatedAt } = s;
+  return {
+    version,
+    settings,
+    transactions,
+    plans,
+    plansUpdatedAt,
+    incomeGoals,
+    incomeGoalsUpdatedAt,
+    deleted,
+    updatedAt,
+  };
 }
 
 const txTime = (t) => t.updatedAt ?? t.createdAt ?? 0;
@@ -195,13 +219,20 @@ function merge(a, b) {
   const transactions = [...byId.values()].filter((t) => !(deleted[t.id] >= txTime(t)));
 
   const newer = (b.updatedAt ?? 0) > a.updatedAt ? b : a;
-  const plansFrom = (b.plansUpdatedAt ?? 0) > a.plansUpdatedAt ? b : a;
   return {
     ...a,
     settings: { ...a.settings, ...newer.settings },
     transactions,
-    plans: plansFrom.plans ?? {},
-    plansUpdatedAt: plansFrom.plansUpdatedAt ?? 0,
+    // Each kind of plan comes whole from whichever side changed it last.
+    ...Object.fromEntries(
+      Object.values(PLAN_FIELDS).flatMap((f) => {
+        const from = (b[f.updatedAt] ?? 0) > (a[f.updatedAt] ?? 0) ? b : a;
+        return [
+          [f.plans, from[f.plans] ?? {}],
+          [f.updatedAt, from[f.updatedAt] ?? 0],
+        ];
+      }),
+    ),
     deleted,
     updatedAt: Math.max(a.updatedAt, b.updatedAt ?? 0),
   };

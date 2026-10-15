@@ -1,8 +1,8 @@
 import { getState, getCategory, getPlan, transactionsForMonth, summarize } from '../store.js';
-import { formatMoney, formatDayHeading, escapeHtml, currentMonth, todayISO } from '../format.js';
-import { navigate } from '../app.js';
+import { formatMoney, formatDayHeading, escapeHtml } from '../format.js';
+import { navigate, switchTab } from '../app.js';
 import { getMonth, monthSwitcherHtml, handleMonthSwitch } from '../month.js';
-import { syncStatusHtml, handleSyncClick } from '../sync-status.js';
+import { planProgressHtml, goalProgressHtml } from './plan.js';
 
 export function renderHome(root) {
   const { currency } = getState().settings;
@@ -26,17 +26,10 @@ export function renderHome(root) {
         </div>
       </div>
       ${renderPlanBlock(expense, currency)}
-      <button class="summary-link" data-action="stats">Статистика ›</button>
+      ${renderGoalBlock(income, currency)}
     </section>
 
     ${txs.length ? renderList(txs, currency) : renderEmpty()}
-
-    ${syncStatusHtml()}
-
-    <div class="bottom-bar">
-      <button class="btn btn-expense" data-action="add-expense">− Расход</button>
-      <button class="btn btn-income" data-action="add-income">+ Доход</button>
-    </div>
   `;
 
   root.onclick = (e) => {
@@ -44,51 +37,38 @@ export function renderHome(root) {
     if (!el) return;
     if (el.dataset.tx) return navigate(`/edit/${encodeURIComponent(el.dataset.tx)}`);
     if (handleMonthSwitch(el)) return renderHome(root);
-    if (handleSyncClick(el)) return;
     switch (el.dataset.action) {
-      case 'stats':
-        return navigate('/stats');
       case 'plan':
-        return navigate('/plan');
-      case 'add-expense':
-        return navigate('/new/expense');
-      case 'add-income':
-        return navigate('/new/income');
+        return switchTab('/plan');
+      case 'plan-edit':
+        return navigate('/plan/edit');
+      case 'goal-edit':
+        return navigate('/plan/income');
     }
   };
 }
 
 function renderPlanBlock(spent, currency) {
   const month = getMonth();
-  const plan = getPlan(month);
-  if (!plan) {
-    return `<button class="plan-empty" data-action="plan">＋ Запланировать расходы на месяц</button>`;
+  if (!getPlan(month)) {
+    return `<button class="plan-empty" data-action="plan-edit">＋ Запланировать расходы на месяц</button>`;
   }
-
-  const left = plan - spent;
-  const over = left < 0;
-  const ratio = Math.min(spent / plan, 1);
-
-  // For the current month, how much can still be spent per day, today included.
-  let perDay = '';
-  if (month === currentMonth() && !over) {
-    const [y, m] = month.split('-').map(Number);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const daysLeft = daysInMonth - Number(todayISO().slice(8)) + 1;
-    perDay = `<div class="plan-hint">≈ ${formatMoney(Math.floor(left / daysLeft / 100) * 100, currency)} в день до конца месяца</div>`;
-  }
-
   return `
-    <div class="plan" data-action="plan" role="button" aria-label="Изменить план">
-      <div class="plan-row">
-        <span>${over ? '⚠️ Перерасход' : 'Осталось'}
-          <b class="${over ? 'neg' : ''}">${formatMoney(Math.abs(left), currency)}</b></span>
-        <span class="plan-of">из ${formatMoney(plan, currency)}</span>
-      </div>
-      <div class="meter ${over ? 'over' : ''}" role="meter" aria-valuemin="0" aria-valuemax="${plan}" aria-valuenow="${spent}">
-        <div class="meter-fill" style="width:${ratio * 100}%"></div>
-      </div>
-      ${perDay}
+    <div class="plan" data-action="plan" role="button" aria-label="Открыть план">
+      <div class="plan-label">План расходов</div>
+      ${planProgressHtml(month, spent, currency)}
+    </div>`;
+}
+
+function renderGoalBlock(earned, currency) {
+  const month = getMonth();
+  if (!getPlan(month, 'income')) {
+    return `<button class="plan-empty" data-action="goal-edit">＋ Поставить цель по доходам</button>`;
+  }
+  return `
+    <div class="plan" data-action="plan" role="button" aria-label="Открыть план">
+      <div class="plan-label">Цель по доходам</div>
+      ${goalProgressHtml(month, earned, currency)}
     </div>`;
 }
 
@@ -135,6 +115,6 @@ function renderEmpty() {
     <div class="empty">
       <div class="empty-emoji">🧾</div>
       <p>В этом месяце пока нет записей.</p>
-      <p class="hint">Добавьте первый расход или доход кнопками ниже.</p>
+      <p class="hint">Нажмите ＋ внизу, чтобы добавить расход или доход.</p>
     </div>`;
 }

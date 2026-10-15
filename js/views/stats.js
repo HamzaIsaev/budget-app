@@ -1,7 +1,6 @@
 import { getState, getCategory, transactionsForMonth, summarize } from '../store.js';
 import { formatMoney, formatMonth, shiftMonth, escapeHtml, monthPrepositional } from '../format.js';
-import { showBackButton, haptic } from '../telegram.js';
-import { goBack } from '../app.js';
+import { haptic } from '../telegram.js';
 import { getMonth, setMonth, monthSwitcherHtml, handleMonthSwitch } from '../month.js';
 
 const TREND_MONTHS = 6;
@@ -59,7 +58,6 @@ export function renderStats(root) {
     }
   };
 
-  showBackButton(goBack);
 }
 
 function totalFor(month) {
