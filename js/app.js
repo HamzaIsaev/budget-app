@@ -10,6 +10,9 @@ import { mountTabBar, updateTabBar } from './tabbar.js';
 import { subscribe, syncNow } from './store.js';
 
 const SYNC_INTERVAL_MS = 30_000;
+// How long the splash stays at least, counted from page start, so its
+// animation plays out instead of flashing by on a fast load.
+const SPLASH_MIN_MS = 1600;
 
 const root = document.getElementById('app');
 
@@ -58,6 +61,15 @@ function route() {
   updateTabBar(null);
 }
 
+function hideSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  setTimeout(() => {
+    splash.classList.add('hide');
+    splash.addEventListener('transitionend', () => splash.remove(), { once: true });
+  }, Math.max(SPLASH_MIN_MS - performance.now(), 0));
+}
+
 /** Switches tabs without adding history, so Back never walks through tabs. */
 export function switchTab(path) {
   if (location.hash === `#${path}`) return route();
@@ -83,6 +95,7 @@ initTelegram();
 mountTabBar((tab) => (tab.add ? navigate(tab.path) : switchTab(tab.path)));
 window.addEventListener('hashchange', route);
 route();
+hideSplash();
 
 // Data from another device: refresh read-only screens, but never a form the
 // user may be typing into.
