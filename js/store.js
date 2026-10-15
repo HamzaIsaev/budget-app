@@ -43,6 +43,8 @@ function emptyState() {
     // Monthly income goals, same shape as `plans`.
     incomeGoals: {},
     incomeGoalsUpdatedAt: 0,
+    // Savings goals ("dreams"): { id, emoji, name, target, saved, deadline?, createdAt, updatedAt }.
+    goals: [],
     // Deleted transaction ids → deletion time, so a deletion on one device
     // isn't undone by another device that still has the transaction.
     deleted: {},
@@ -158,11 +160,9 @@ const PLAN_FIELDS = {
   income: { plans: 'incomeGoals', updatedAt: 'incomeGoalsUpdatedAt' },
 };
 
-/**
- * The plan for a month, in minor units, or null. A plan carries forward to
- * later months until a new one is set, so changing it never rewrites the past.
- */
-export function getPlan(month, kind = 'expense') {
+// The stored plan in effect for a month: plans carry forward to later months
+// until a new one is set, so changing a plan never rewrites the past.
+function planEntry(month, kind) {
   const plans = state[PLAN_FIELDS[kind].plans];
   const from = Object.keys(plans)
     .filter((m) => m <= month)
@@ -171,13 +171,67 @@ export function getPlan(month, kind = 'expense') {
   return from ? plans[from] : null;
 }
 
-/** Sets the plan from `month` onward; `null` removes it from that month on. */
-export function setPlan(month, amount, kind = 'expense') {
+/**
+ * The month's plan total in minor units, or null. A spending plan is stored
+ * either as a single number or as itemized { items: [{ name, amount,
+ * categoryId? }] }, whose total is the sum of the items.
+ */
+export function getPlan(month, kind = 'expense') {
+  const entry = planEntry(month, kind);
+  if (entry?.items) return entry.items.reduce((sum, i) => sum + i.amount, 0) || null;
+  return entry;
+}
+
+/** The spending plan's items for the month, or null if it is a plain total. */
+export function getPlanItems(month) {
+  return planEntry(month, 'expense')?.items ?? null;
+}
+
+/**
+ * Sets the plan from `month` onward: a number, `{ items }` for an itemized
+ * spending plan, or `null` to remove it from that month on.
+ */
+export function setPlan(month, value, kind = 'expense') {
   const fields = PLAN_FIELDS[kind];
   const plans = Object.fromEntries(Object.entries(state[fields.plans]).filter(([m]) => m < month));
-  plans[month] = amount;
+  plans[month] = value;
   state[fields.plans] = plans;
   state[fields.updatedAt] = Date.now();
+  persist();
+}
+
+// --- Savings goals ("dreams") ---------------------------------------------------
+
+export function getGoals() {
+  return [...state.goals].sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export function getGoal(id) {
+  return state.goals.find((g) => g.id === id);
+}
+
+/** Creates a goal (no `id`) or updates one. Returns its id. */
+export function saveGoal(goal) {
+  const now = Date.now();
+  if (goal.id) {
+    state.goals = state.goals.map((g) => (g.id === goal.id ? { ...g, ...goal, updatedAt: now } : g));
+  } else {
+    goal = { saved: 0, ...goal, id: newId(), createdAt: now, updatedAt: now };
+    state.goals = [...state.goals, goal];
+  }
+  persist();
+  return goal.id;
+}
+
+/** Puts money aside for a goal. */
+export function addToGoal(id, amount) {
+  const goal = getGoal(id);
+  if (goal) saveGoal({ id, saved: goal.saved + amount });
+}
+
+export function deleteGoal(id) {
+  state.goals = state.goals.filter((g) => g.id !== id);
+  state.deleted = { ...state.deleted, [id]: Date.now() };
   persist();
 }
 
@@ -185,12 +239,13 @@ export function setPlan(month, amount, kind = 'expense') {
 
 // What goes to the cloud. Categories are left out: built-in ones come from code.
 function cloudData(s) {
-  const { version, settings, transactions, deleted, updatedAt } = s;
+  const { version, settings, transactions, goals, deleted, updatedAt } = s;
   const { plans, plansUpdatedAt, incomeGoals, incomeGoalsUpdatedAt } = s;
   return {
     version,
     settings,
     transactions,
+    goals,
     plans,
     plansUpdatedAt,
     incomeGoals,
@@ -200,29 +255,37 @@ function cloudData(s) {
   };
 }
 
-const txTime = (t) => t.updatedAt ?? t.createdAt ?? 0;
+const itemTime = (t) => t.updatedAt ?? t.createdAt ?? 0;
+
+// Union of two lists of records by id: the latest edit wins, and a deletion
+// wins over edits made before it.
+function mergeById(a = [], b = [], deleted) {
+  const byId = new Map();
+  for (const item of [...a, ...b]) {
+    const current = byId.get(item.id);
+    if (!current || itemTime(item) > itemTime(current)) byId.set(item.id, item);
+  }
+  return [...byId.values()].filter((item) => !(deleted[item.id] >= itemTime(item)));
+}
 
 /**
  * Combines two copies of the data, e.g. this device's and the cloud's, so that
  * changes made on either side while the other was out of date are kept.
- * Per transaction the latest edit wins; a deletion wins over older edits.
+ * Per transaction and goal the latest edit wins; a deletion wins over older edits.
  */
 function merge(a, b) {
   const deleted = { ...a.deleted };
   for (const [id, at] of Object.entries(b.deleted ?? {})) deleted[id] = Math.max(deleted[id] ?? 0, at);
 
-  const byId = new Map();
-  for (const t of [...a.transactions, ...(b.transactions ?? [])]) {
-    const current = byId.get(t.id);
-    if (!current || txTime(t) > txTime(current)) byId.set(t.id, t);
-  }
-  const transactions = [...byId.values()].filter((t) => !(deleted[t.id] >= txTime(t)));
+  const transactions = mergeById(a.transactions, b.transactions, deleted);
+  const goals = mergeById(a.goals, b.goals, deleted);
 
   const newer = (b.updatedAt ?? 0) > a.updatedAt ? b : a;
   return {
     ...a,
     settings: { ...a.settings, ...newer.settings },
     transactions,
+    goals,
     // Each kind of plan comes whole from whichever side changed it last.
     ...Object.fromEntries(
       Object.values(PLAN_FIELDS).flatMap((f) => {

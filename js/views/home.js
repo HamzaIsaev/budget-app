@@ -1,8 +1,8 @@
 import { getState, getCategory, getPlan, transactionsForMonth, summarize } from '../store.js';
 import { formatMoney, formatDayHeading, escapeHtml } from '../format.js';
-import { navigate, switchTab } from '../app.js';
+import { navigate } from '../app.js';
 import { getMonth, monthSwitcherHtml, handleMonthSwitch } from '../month.js';
-import { planProgressHtml, goalProgressHtml } from './plan.js';
+import { planProgressHtml, goalProgressHtml, planItemsHtml, handleItemsToggle } from './budget.js';
 
 export function renderHome(root) {
   const { currency } = getState().settings;
@@ -25,9 +25,10 @@ export function renderHome(root) {
           <div class="neg">${formatMoney(expense, currency)}</div>
         </div>
       </div>
-      ${renderPlanBlock(expense, currency)}
-      ${renderGoalBlock(income, currency)}
     </section>
+
+    ${renderPlanCard(expense, currency)}
+    ${renderGoalCard(income, currency)}
 
     ${txs.length ? renderList(txs, currency) : renderEmpty()}
   `;
@@ -37,39 +38,53 @@ export function renderHome(root) {
     if (!el) return;
     if (el.dataset.tx) return navigate(`/edit/${encodeURIComponent(el.dataset.tx)}`);
     if (handleMonthSwitch(el)) return renderHome(root);
+    if (handleItemsToggle(el)) return;
     switch (el.dataset.action) {
-      case 'plan':
-        return switchTab('/plan');
       case 'plan-edit':
-        return navigate('/plan/edit');
+        return navigate('/budget/edit');
       case 'goal-edit':
-        return navigate('/plan/income');
+        return navigate('/budget/income');
     }
   };
 }
 
-function renderPlanBlock(spent, currency) {
-  const month = getMonth();
-  if (!getPlan(month)) {
-    return `<button class="plan-empty" data-action="plan-edit">＋ Запланировать расходы на месяц</button>`;
-  }
+function cardHead(title, action) {
   return `
-    <div class="plan" data-action="plan" role="button" aria-label="Открыть план">
-      <div class="plan-label">План расходов</div>
-      ${planProgressHtml(month, spent, currency)}
+    <div class="plan-card-head">
+      <h2 class="chart-title">${title}</h2>
+      <button class="link-btn" data-action="${action}">Изменить</button>
     </div>`;
 }
 
-function renderGoalBlock(earned, currency) {
+function renderPlanCard(spent, currency) {
   const month = getMonth();
-  if (!getPlan(month, 'income')) {
-    return `<button class="plan-empty" data-action="goal-edit">＋ Поставить цель по доходам</button>`;
+  if (!getPlan(month)) {
+    return `
+      <section class="card plan-card">
+        <button class="link-btn" data-action="plan-edit">＋ Запланировать расходы на месяц</button>
+      </section>`;
   }
   return `
-    <div class="plan" data-action="plan" role="button" aria-label="Открыть план">
-      <div class="plan-label">Цель по доходам</div>
+    <section class="card plan-card">
+      ${cardHead('План расходов', 'plan-edit')}
+      ${planProgressHtml(month, spent, currency)}
+      ${planItemsHtml(month, currency)}
+    </section>`;
+}
+
+function renderGoalCard(earned, currency) {
+  const month = getMonth();
+  if (!getPlan(month, 'income')) {
+    return `
+      <section class="card plan-card">
+        <button class="link-btn" data-action="goal-edit">＋ Поставить цель по доходам</button>
+      </section>`;
+  }
+  return `
+    <section class="card plan-card">
+      ${cardHead('Цель по доходам', 'goal-edit')}
       ${goalProgressHtml(month, earned, currency)}
-    </div>`;
+    </section>`;
 }
 
 function renderList(txs, currency) {

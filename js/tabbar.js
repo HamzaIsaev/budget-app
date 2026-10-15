@@ -18,9 +18,11 @@ const TABS = [
   },
   { path: '/new/expense', label: 'Добавить', add: true },
   {
-    path: '/plan',
-    label: 'План',
-    icon: icon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'),
+    path: '/dreams',
+    label: 'Мечты',
+    icon: icon(
+      '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+    ),
   },
   {
     path: '/more',

@@ -5,7 +5,7 @@ import {
   deleteTransaction,
   getState,
 } from '../store.js';
-import { parseAmount, amountToInput, todayISO, escapeHtml } from '../format.js';
+import { parseAmount, amountToInput, todayISO, escapeHtml, bindAmountInput } from '../format.js';
 import {
   showBackButton,
   showMainButton,
@@ -110,16 +110,7 @@ export function renderForm(root, { id, type }) {
     }
   };
 
-  amountEl.addEventListener('input', () => {
-    // Keep only digits and a single decimal separator with up to 2 digits.
-    const cleaned = amountEl.value
-      .replace(/[^\d.,]/g, '')
-      .replace(/\./g, ',')
-      .replace(/,(?=.*,)/g, '')
-      .replace(/(,\d{2})\d+$/, '$1');
-    if (cleaned !== amountEl.value) amountEl.value = cleaned;
-    validate();
-  });
+  bindAmountInput(amountEl, validate);
 
   function save() {
     const amount = parseAmount(amountEl.value);

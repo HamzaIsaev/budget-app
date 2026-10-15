@@ -82,3 +82,19 @@ const MONTHS_PREPOSITIONAL = [
 export function monthPrepositional(month) {
   return MONTHS_PREPOSITIONAL[Number(month.slice(5, 7)) - 1];
 }
+
+/**
+ * Keeps an amount input to digits with one decimal comma and up to two decimals
+ * as the user types, then calls `onChange`.
+ */
+export function bindAmountInput(input, onChange = () => {}) {
+  input.addEventListener('input', () => {
+    const cleaned = input.value
+      .replace(/[^\d.,]/g, '')
+      .replace(/\./g, ',')
+      .replace(/,(?=.*,)/g, '')
+      .replace(/(,\d{2})\d+$/, '$1');
+    if (cleaned !== input.value) input.value = cleaned;
+    onChange();
+  });
+}

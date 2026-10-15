@@ -537,32 +537,6 @@ button {
 
 /* --- Monthly plan ------------------------------------------------------------ */
 
-.plan,
-.plan-empty {
-  display: block;
-  width: 100%;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--separator);
-  text-align: left;
-  cursor: pointer;
-}
-
-.plan-empty {
-  color: var(--accent);
-  font-size: 15px;
-  font-weight: 500;
-}
-
-.plan-label {
-  color: var(--hint);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 6px;
-}
-
 .plan-row {
   display: flex;
   justify-content: space-between;
@@ -714,6 +688,11 @@ body.has-tabbar #app {
   margin-bottom: 16px;
 }
 
+.plan-card.empty {
+  text-align: center;
+  padding: 28px 18px;
+}
+
 .plan-card-head {
   display: flex;
   justify-content: space-between;
@@ -730,20 +709,6 @@ body.has-tabbar #app {
   font-size: 15px;
 }
 
-.plan-empty-text {
-  margin: 0;
-}
-
-.plan-spent {
-  color: var(--hint);
-  font-size: 14px;
-  margin-bottom: 12px;
-}
-
-.plan-spent b {
-  color: var(--text);
-}
-
 .more-card {
   padding: 4px 16px 14px;
 }
@@ -752,4 +717,235 @@ body.has-tabbar #app {
   margin: 0;
   font-size: 13px;
   text-align: center;
+}
+
+/* --- Category limits and dreams ---------------------------------------------- */
+
+.plan-items {
+  margin-top: 14px;
+  border-top: 1px solid var(--separator);
+}
+
+.items-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 0 0;
+  color: var(--hint);
+  font-size: 14px;
+}
+
+.chevron {
+  display: inline-block;
+  font-size: 20px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+}
+
+.plan-items.collapsed .chevron {
+  transform: rotate(0deg);
+}
+
+.plan-items.collapsed .items-body {
+  display: none;
+}
+
+.limits {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.limit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.limit-value {
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.limit-value .plan-of {
+  font-weight: 400;
+}
+
+.meter.thin {
+  height: 6px;
+}
+
+.limits-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 16px 4px 12px;
+  font-size: 17px;
+}
+
+.limits-total b {
+  font-size: 22px;
+}
+
+.goal-card {
+  padding: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.goal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.goal-emoji {
+  font-size: 30px;
+}
+
+.goal-title {
+  min-width: 0;
+}
+
+.goal-name {
+  font-size: 17px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-saved {
+  color: var(--text);
+}
+
+.meter.goal .meter-fill {
+  background: #c9a24a;
+}
+
+.goal-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.goal-foot .plan-hint {
+  margin: 0;
+}
+
+.goal-foot .link-btn {
+  white-space: nowrap;
+}
+
+.emoji-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.emoji-chip {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 22px;
+  border: 2px solid transparent;
+}
+
+.emoji-chip.active {
+  border-color: var(--accent);
+}
+
+/* Room for the browser-only stand-in of Telegram's main button. */
+body:has(.main-button) #app {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+/* --- Spending plan editor: items ------------------------------------------- */
+
+.items-card {
+  overflow: hidden;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item-cat {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.item-name,
+.item-amount {
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.item-name {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--separator);
+  font-size: 15px;
+}
+
+.item-amount {
+  width: 96px;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.item-name::placeholder,
+.item-amount::placeholder {
+  color: var(--hint);
+  font-weight: 400;
+}
+
+.item-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--hint);
+  font-size: 13px;
+}
+
+.item-add {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  color: var(--accent);
+  font-weight: 500;
+  text-align: left;
 }
