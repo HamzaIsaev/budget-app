@@ -10,9 +10,19 @@ const META_KEY = 'meta';
 // Local fake for testing sync in a regular browser: localStorage['budget:mock-cloud'] = '1'.
 const MOCK_FLAG = 'budget:mock-cloud';
 
+// Why the cloud is unavailable, shown to the user; null when it is available.
+let unavailableReason = null;
+
 function telegramStorage() {
   const tg = window.Telegram?.WebApp;
-  if (!tg?.initData || !tg.isVersionAtLeast?.('6.9') || !tg.CloudStorage) return null;
+  if (!tg?.initData) {
+    unavailableReason = 'приложение открыто не в Telegram';
+    return null;
+  }
+  if (!tg.isVersionAtLeast?.('6.9') || !tg.CloudStorage) {
+    unavailableReason = `Telegram ${tg.version} не поддерживает облако, обновите приложение`;
+    return null;
+  }
   const call = (method, ...args) =>
     new Promise((resolve, reject) =>
       tg.CloudStorage[method](...args, (err, result) => (err ? reject(new Error(err)) : resolve(result))),
@@ -41,6 +51,10 @@ const storage = telegramStorage() ?? (localStorage.getItem(MOCK_FLAG) ? mockStor
 
 export function cloudAvailable() {
   return storage !== null;
+}
+
+export function cloudUnavailableReason() {
+  return storage ? null : unavailableReason;
 }
 
 async function readMeta() {

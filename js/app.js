@@ -5,6 +5,8 @@ import { renderStats } from './views/stats.js';
 import { renderPlan } from './views/plan.js';
 import { subscribe, syncNow } from './store.js';
 
+const SYNC_INTERVAL_MS = 30_000;
+
 const root = document.getElementById('app');
 
 // Routes: #/            — month overview
@@ -59,7 +61,11 @@ subscribe(() => {
   if (view === '' || view === 'stats') route();
 });
 syncNow();
-// Push pending changes before Telegram suspends or closes the app.
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') syncNow();
-});
+// Push pending changes before Telegram suspends the app, and pull what other
+// devices changed when it comes back: on phones Telegram keeps the app alive in
+// the background, so returning to it doesn't restart it.
+document.addEventListener('visibilitychange', () => syncNow());
+// While open, pick up changes from other devices.
+setInterval(() => {
+  if (document.visibilityState === 'visible') syncNow();
+}, SYNC_INTERVAL_MS);

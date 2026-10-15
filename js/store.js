@@ -4,7 +4,7 @@
 // is shared between the user's devices.
 
 import { userId } from './telegram.js';
-import { cloudAvailable, loadFromCloud, saveToCloud } from './cloud.js';
+import { cloudAvailable, cloudUnavailableReason, loadFromCloud, saveToCloud } from './cloud.js';
 
 const SCHEMA_VERSION = 1;
 const STORAGE_KEY = `budget:v${SCHEMA_VERSION}:${userId() ?? 'local'}`;
@@ -212,6 +212,26 @@ const sameData = (x, y) => JSON.stringify(cloudData(x)) === JSON.stringify(cloud
 let syncing = Promise.resolve();
 let syncTimer = null;
 
+// Shown on the home screen so problems on a device are visible, not just logged.
+let syncStatus = cloudAvailable()
+  ? { state: 'idle' }
+  : { state: 'off', error: cloudUnavailableReason() };
+const statusListeners = new Set();
+
+export function getSyncStatus() {
+  return syncStatus;
+}
+
+export function onSyncStatus(fn) {
+  statusListeners.add(fn);
+  return () => statusListeners.delete(fn);
+}
+
+function setSyncStatus(next) {
+  syncStatus = next;
+  statusListeners.forEach((fn) => fn(syncStatus));
+}
+
 function scheduleSync() {
   if (!cloudAvailable()) return;
   clearTimeout(syncTimer);
@@ -227,6 +247,7 @@ export function syncNow() {
   clearTimeout(syncTimer);
   if (!cloudAvailable()) return Promise.resolve();
   syncing = syncing.then(async () => {
+    setSyncStatus({ ...syncStatus, state: 'syncing' });
     try {
       const remote = await loadFromCloud();
       const merged = remote ? merge(state, remote) : state;
@@ -236,8 +257,10 @@ export function syncNow() {
         listeners.forEach((fn) => fn(state));
       }
       if (!remote || !sameData(merged, remote)) await saveToCloud(cloudData(merged));
+      setSyncStatus({ state: 'ok', at: Date.now() });
     } catch (e) {
       console.error('Cloud sync failed', e);
+      setSyncStatus({ state: 'error', error: e.message || String(e), at: syncStatus.at });
     }
   });
   return syncing;

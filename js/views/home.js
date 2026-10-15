@@ -2,6 +2,7 @@ import { getState, getCategory, getPlan, transactionsForMonth, summarize } from 
 import { formatMoney, formatDayHeading, escapeHtml, currentMonth, todayISO } from '../format.js';
 import { navigate } from '../app.js';
 import { getMonth, monthSwitcherHtml, handleMonthSwitch } from '../month.js';
+import { syncStatusHtml, handleSyncClick } from '../sync-status.js';
 
 export function renderHome(root) {
   const { currency } = getState().settings;
@@ -30,6 +31,8 @@ export function renderHome(root) {
 
     ${txs.length ? renderList(txs, currency) : renderEmpty()}
 
+    ${syncStatusHtml()}
+
     <div class="bottom-bar">
       <button class="btn btn-expense" data-action="add-expense">− Расход</button>
       <button class="btn btn-income" data-action="add-income">+ Доход</button>
@@ -41,6 +44,7 @@ export function renderHome(root) {
     if (!el) return;
     if (el.dataset.tx) return navigate(`/edit/${encodeURIComponent(el.dataset.tx)}`);
     if (handleMonthSwitch(el)) return renderHome(root);
+    if (handleSyncClick(el)) return;
     switch (el.dataset.action) {
       case 'stats':
         return navigate('/stats');
